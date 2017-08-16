@@ -495,7 +495,7 @@ namespace ImapX
             return sb.ToString();
         }
 
-        public bool Download(MessageFetchMode mode = MessageFetchMode.ClientDefault, bool reloadHeaders = false)
+        public bool Download(MessageFetchMode mode = MessageFetchMode.ClientDefault, bool reloadHeaders = false, string[] headersOverride = null)
         {
             if (mode == MessageFetchMode.ClientDefault)
                 mode = _client.Behavior.MessageFetchMode;
@@ -517,14 +517,17 @@ namespace ImapX
             if (mode.HasFlag(MessageFetchMode.Headers) && (!_downloadProgress.HasFlag(MessageFetchMode.Headers) || reloadHeaders))
             {
                 Headers.Clear();
+
+                var fields = headersOverride ?? _client.Behavior.RequestedHeaders;
+
+                var headerFields = fields.Where(_ => !string.IsNullOrEmpty(_))
+                    .Select(_ => _.ToUpper())
+                    .ToArray();
+
                 if (_client.Behavior.RequestedHeaders == null || _client.Behavior.RequestedHeaders.Length == 0)
                     fetchParts.Append("BODY.PEEK[HEADER] ");
                 else
-                    fetchParts.Append("BODY.PEEK[HEADER.FIELDS (" +
-                                      string.Join(" ",
-                                          _client.Behavior.RequestedHeaders.Where(_ => !string.IsNullOrEmpty(_))
-                                              .Select(_ => _.ToUpper())
-                                              .ToArray()) + ")] ");
+                    fetchParts.Append("BODY.PEEK[HEADER.FIELDS (" + string.Join(" ", headerFields) + ")] ");
             }
 
             if (mode.HasFlag(MessageFetchMode.BodyStructure) &&
@@ -550,8 +553,8 @@ namespace ImapX
             if (fetchParts.Length > 0 &&
                 !_client.SendAndReceive(string.Format(ImapCommands.Fetch, UId, fetchParts.ToString().Trim()), ref data))
                 return false;
-            else
-                NormalizeAndProcessFetchResult(data);
+
+            NormalizeAndProcessFetchResult(data);
 
             BindHeadersToFields();
 

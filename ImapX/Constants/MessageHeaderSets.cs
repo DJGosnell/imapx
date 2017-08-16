@@ -18,5 +18,12 @@ namespace ImapX.Constants
             MessageHeader.ContentType
         };
 
+        public static readonly string[] Search =
+        {
+            MessageHeader.Date,
+            MessageHeader.Subject,
+            MessageHeader.MessageId
+        };
+
     }
 }
