@@ -81,10 +81,16 @@ namespace ImapX
 
         public DateTime? InternalDate { get; private set; }
 
+        private DateTime? _date;
         /// <summary>
         ///     The time when the message was written (or submitted)
         /// </summary>
-        public DateTime? Date { get; set; }
+        public DateTime? Date => _date ?? (_date = DateTimeExtensions.ParseDate(DateString));
+
+        /// <summary>
+        /// Raw string from the server which contains the date information.
+        /// </summary>
+        public string DateString { get; private set; }
 
         /// <summary>
         ///     All headers associated with the message
@@ -397,7 +403,7 @@ namespace ImapX
                         Organization = StringDecoder.Decode(header.Value, true);
                         break;
                     case MessageHeader.Date:
-                        Date = HeaderFieldParser.ParseDate(header.Value);
+                        DateString = header.Value;
                         break;
                     case MessageHeader.Importance:
                         Importance = header.Value.ToMessageImportance();
@@ -479,20 +485,26 @@ namespace ImapX
         /// Downloads the raw message (EML) returned by the server. It's not recommended to use this method unless you don't need to parse the message and only want to save it completely.
         /// </summary>
         /// <returns></returns>
-        public string DownloadRawMessage()
+        public IList<string> DownloadRawMessage()
         {
             IList<string> data = new List<string>();
             if(!_client.SendAndReceive(string.Format(ImapCommands.Fetch, UId, "BODY.PEEK[]"), ref data))            
                 throw new OperationFailedException("The raw message could not be downloaded");
 
-            var sb = new StringBuilder();
-            for (var i = 1; i < data.Count; i++)
+            // Remove the end of the command.
+            if (data[data.Count - 2].StartsWith(")") || data[data.Count - 2].Contains("UID"))
             {
-                if ((data[i].StartsWith(")") || data[i].Contains("UID")) && (i == data.Count - 1 || i == data.Count - 2))
-                    break;
-                sb.AppendLine(data[i]);
+                data.RemoveAt(data.Count - 2);
+                data.RemoveAt(data.Count - 1);
             }
-            return sb.ToString();
+            else if (data[data.Count - 1].StartsWith(")") || data[data.Count - 1].Contains("UID"))
+                data.RemoveAt(data.Count - 1);
+
+            // Remove the download info from the first line.
+            data.RemoveAt(0);
+
+            return data;
+
         }
 
         public bool Download(MessageFetchMode mode = MessageFetchMode.ClientDefault, bool reloadHeaders = false, string[] headersOverride = null)
